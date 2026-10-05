@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { FeishuClient } from '../src/client.ts'
+import { FeishuClient, FeishuError } from '../src/client.ts'
+
+/** Deterministic DNS so tests never depend on real resolution. */
+const publicLookup = async () => [{ address: '93.184.216.34', family: 4 as const }]
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -19,7 +22,7 @@ describe('FeishuClient', () => {
       tenant_access_token: 't-abc123',
       expire: 7200,
     }))
-    const client = new FeishuClient({ appId: 'cli_test', appSecret: 'secret_test', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, appId: 'cli_test', appSecret: 'secret_test', fetchImpl })
     const auth = await client.authTest()
 
     expect(auth).toMatchObject({ ok: true, appId: 'cli_test' })
@@ -36,7 +39,7 @@ describe('FeishuClient', () => {
       tenant_access_token: 't-raw123',
       expire: 7200,
     }))
-    const client = new FeishuClient({ appId: 'cli_test', appSecret: 'secret_test', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, appId: 'cli_test', appSecret: 'secret_test', fetchImpl })
     const auth = await client.authTest()
 
     expect(auth).toMatchObject({ ok: true, appId: 'cli_test' })
@@ -49,7 +52,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 'static-token', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 'static-token', fetchImpl })
     const result = await client.listChats()
 
     expect(result.items[0]).toMatchObject({ chatId: 'oc_1', name: 'General', memberCount: 10 })
@@ -68,7 +71,7 @@ describe('FeishuClient', () => {
       has_more: true,
       page_token: 'page2',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listChats({ pageSize: 10, pageToken: 'page1' })
 
     expect(result.hasMore).toBe(true)
@@ -84,7 +87,7 @@ describe('FeishuClient', () => {
     const fetchImpl = vi.fn(async () => feishuOk({
       chat_id: 'oc_1', name: 'General', description: 'Main chat', chat_type: 'group', user_count: 10,
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const chat = await client.getChat('oc_1')
 
     expect(chat).toMatchObject({ chatId: 'oc_1', name: 'General', description: 'Main chat', memberCount: 10 })
@@ -101,7 +104,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listChatMembers('oc_1')
 
     expect(result.items).toHaveLength(2)
@@ -122,7 +125,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listMessages('oc_1', { startTime: '1700000000', endTime: '1700003600' })
 
     expect(result.items).toHaveLength(1)
@@ -140,7 +143,7 @@ describe('FeishuClient', () => {
       create_time: '1700000000', update_time: '1700000000',
       deleted: false, updated: false, mentions: [],
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const msg = await client.getMessage('msg_1')
 
     expect(msg).toMatchObject({ messageId: 'msg_1', msgType: 'text', senderId: 'u1' })
@@ -158,7 +161,7 @@ describe('FeishuClient', () => {
         deleted: false, updated: false, mentions: [],
       }],
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const message = await client.getMessage('msg_items')
 
     expect(message).toMatchObject({ messageId: 'msg_items', content: '{"text":"from items"}', senderId: 'u1' })
@@ -168,7 +171,7 @@ describe('FeishuClient', () => {
     const fetchImpl = vi.fn(async () => feishuOk({
       message_id: 'msg_new',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.sendMessage('oc_1', 'text', '{"text":"hi"}')
 
     expect(result).toMatchObject({ messageId: 'msg_new' })
@@ -189,7 +192,7 @@ describe('FeishuClient', () => {
         job_title: 'Engineer', city: 'Shanghai', country: 'CN', tenant_key: 'tk1',
       },
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const user = await client.getUser('u1', { userIdType: 'open_id', departmentIdType: 'open_department_id' })
 
     expect(user).toMatchObject({ userId: 'u1', name: 'Alice', email: 'alice@example.com', jobTitle: 'Engineer', status: 'active' })
@@ -206,7 +209,7 @@ describe('FeishuClient', () => {
         status: { is_activated: false }, department_ids: ['dept_1'],
       },
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const user = await client.getUser('u2')
 
     expect(user).toMatchObject({ userId: 'u2', name: 'Bob', status: 'inactive' })
@@ -218,7 +221,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     await client.listUsers()
 
     const [url] = fetchImpl.mock.calls[0] as [string]
@@ -235,7 +238,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listUsers({ departmentId: 'dept_1', departmentIdType: 'open_department_id', pageSize: 10 })
 
     expect(result.items).toHaveLength(1)
@@ -252,7 +255,7 @@ describe('FeishuClient', () => {
         name: 'Engineering', member_count: 12, leader_user_id: 'u1', status: 'active',
       },
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const dept = await client.getDepartment('dep_1', { departmentIdType: 'open_department_id' })
 
     expect(dept).toMatchObject({ departmentId: 'dep_1', openDepartmentId: 'od_1', name: 'Engineering', memberCount: 12 })
@@ -270,7 +273,7 @@ describe('FeishuClient', () => {
       has_more: true,
       page_token: 'dep_page2',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listDepartments({ parentDepartmentId: 'dep_root', departmentIdType: 'open_department_id', fetchChild: true, pageSize: 10, pageToken: 'dep_page1' })
 
     expect(result.hasMore).toBe(true)
@@ -294,7 +297,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listDepartmentChildren('dep_1', { departmentIdType: 'open_department_id', fetchChild: true, pageSize: 10 })
 
     expect(result.items).toHaveLength(1)
@@ -316,7 +319,7 @@ describe('FeishuClient', () => {
         { calendar_id: 'cal_2', summary: 'Personal', permissions: 'owner', type: 'personal', role: 'owner' },
       ],
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listCalendars({ pageSize: 10, pageToken: 'page1', syncToken: 'sync1' })
 
     expect(result.hasMore).toBe(true)
@@ -343,7 +346,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listCalendarEvents('cal_1', { startTime: '1700000000', endTime: '1700003600' })
 
     expect(result.items).toHaveLength(1)
@@ -363,7 +366,7 @@ describe('FeishuClient', () => {
       has_more: false,
       page_token: '',
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const result = await client.listApprovalInstances({ approvalCode: 'ap_1' })
 
     expect(result.items).toHaveLength(1)
@@ -395,7 +398,7 @@ describe('FeishuClient', () => {
       reverted_instance_code: '',
       reverted: false,
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     const detail = await client.getApprovalInstance('inst_1', { userId: 'u1', userIdType: 'open_id', locale: 'zh-CN' })
 
     expect(detail).toMatchObject({
@@ -431,7 +434,7 @@ describe('FeishuClient', () => {
       comment_list: [],
       timeline: [],
     }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
     await client.getApprovalInstance('inst_1', { userId: 'u1' })
 
     const [url] = fetchImpl.mock.calls[0] as [string]
@@ -443,7 +446,7 @@ describe('FeishuClient', () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(feishuOk({}))
       .mockResolvedValueOnce(feishuOk({}))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
 
     const approved = await client.approveApprovalTask({
       approvalCode: 'ap_1',
@@ -488,15 +491,83 @@ describe('FeishuClient', () => {
     const fetchImpl = vi.fn(async () => feishuOk(null))
     // Override to return error code
     fetchImpl.mockResolvedValueOnce(jsonResponse({ code: 99991, msg: 'token invalid', data: null }))
-    const client = new FeishuClient({ token: 'bad', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 'bad', fetchImpl })
 
     await expect(client.listChats()).rejects.toThrow('token invalid')
   })
 
   it('throws FeishuError on HTTP error', async () => {
     const fetchImpl = vi.fn(async () => new Response('Internal Server Error', { status: 500 }))
-    const client = new FeishuClient({ token: 't', fetchImpl })
+    const client = new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl })
 
     await expect(client.listChats()).rejects.toThrow('HTTP 500')
+  })
+
+  it('rejects invalid base URLs without exposing their contents', () => {
+    for (const baseUrl of [
+      'open.feishu.cn/open-apis',
+      'ftp://open.feishu.cn/open-apis',
+      'https://user:secret@open.feishu.cn/open-apis',
+      'https://open.feishu.cn/open-apis?token=secret',
+      'https://open.feishu.cn/open-apis#fragment',
+    ]) {
+      let error: unknown
+      try { new FeishuClient({ token: 'secret', baseUrl }) } catch (thrown) { error = thrown }
+      expect(error).toBeInstanceOf(FeishuError)
+      expect(String(error)).not.toContain('secret')
+    }
+  })
+
+  it('rejects literal local, private, and reserved addresses before fetch', async () => {
+    for (const baseUrl of [
+      'http://localhost',
+      'http://service.localhost',
+      'http://service.local',
+      'http://127.0.0.1',
+      'http://169.254.169.254',
+      'http://10.0.0.1',
+      'http://192.168.1.1',
+      'http://192.0.2.1',
+      'http://198.18.0.1',
+      'http://224.0.0.1',
+      'http://192.175.48.1',
+      'http://[::1]',
+      'http://[fc00::1]',
+      'http://[fe80::1]',
+      'http://[fec0::1]',
+      'http://[2001:db8::1]',
+      'http://[2001:3::1]',
+      'http://[2001:4:112::1]',
+      'http://[2001:30::1]',
+      'http://[5f00::1]',
+      'http://[100:0:0:1::1]',
+      'http://[2620:4f:8000::1]',
+      'http://[64:ff9b::7f00:1]',
+      'http://[ff02::1]',
+    ]) {
+      const fetchImpl = vi.fn()
+      await expect(new FeishuClient({ token: 't', baseUrl, fetchImpl }).listChats()).rejects.toMatchObject({ name: 'FeishuError' })
+      expect(fetchImpl).not.toHaveBeenCalled()
+    }
+  })
+
+  it('fails closed on blocked, failed, empty, or inconsistent DNS results', async () => {
+    for (const lookupImpl of [
+      async () => [{ address: '192.168.1.10', family: 4 as const }],
+      async () => [{ address: '93.184.216.34', family: 4 as const }, { address: '169.254.169.254', family: 4 as const }],
+      async () => { throw new Error('dns failure') },
+      async () => [],
+      async () => [{ address: '2001:db8::1', family: 4 as const }],
+    ]) {
+      const fetchImpl = vi.fn()
+      await expect(new FeishuClient({ token: 't', baseUrl: 'https://feishu.example.test', fetchImpl, lookupImpl }).listChats()).rejects.toMatchObject({ name: 'FeishuError' })
+      expect(fetchImpl).not.toHaveBeenCalled()
+    }
+  })
+
+  it('keeps a public endpoint that resolves to a public address usable', async () => {
+    const fetchImpl = vi.fn(async () => feishuOk({ items: [] }))
+    await expect(new FeishuClient({ token: 't', baseUrl: 'https://feishu.example.test/', fetchImpl, lookupImpl: publicLookup }).listChats()).resolves.toBeDefined()
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 })

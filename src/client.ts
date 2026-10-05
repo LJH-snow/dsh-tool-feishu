@@ -1,5 +1,7 @@
 /** Feishu/Lark Open API client with injected fetch for testability. */
 
+import { assertSafeUrl, EndpointSecurityError, normalizeBaseUrl, type LookupImpl } from './url-security.js'
+
 export interface FeishuClientOptions {
   /** Feishu app id for tenant_access_token authentication. */
   appId?: string
@@ -12,6 +14,8 @@ export interface FeishuClientOptions {
   /** Request timeout in milliseconds. 0 disables the timeout. */
   timeoutMs?: number
   fetchImpl?: typeof fetch
+  /** Test-only DNS lookup override; production uses node:dns/promises. */
+  lookupImpl?: LookupImpl
 }
 
 export class FeishuError extends Error {
@@ -348,15 +352,22 @@ export class FeishuClient {
   private readonly baseUrl: string
   private readonly timeoutMs: number
   private readonly fetchImpl: typeof fetch
+  private readonly lookupImpl: LookupImpl | undefined
   private tokenCache: TokenCache | null = null
 
   constructor(options: FeishuClientOptions = {}) {
     this.appId = options.appId ?? ''
     this.appSecret = options.appSecret ?? ''
     this.staticToken = options.token ?? ''
-    this.baseUrl = (options.baseUrl ?? 'https://open.feishu.cn/open-apis').replace(/\/+$/, '')
+    try {
+      this.baseUrl = normalizeBaseUrl(options.baseUrl, 'https://open.feishu.cn/open-apis')
+    } catch (error) {
+      if (error instanceof EndpointSecurityError) throw new FeishuError(error.message, 400)
+      throw error
+    }
     this.timeoutMs = options.timeoutMs ?? 15000
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
+    this.lookupImpl = options.lookupImpl
   }
 
   hasCredentials(): boolean {
@@ -408,7 +419,14 @@ export class FeishuClient {
     const combined = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
     const timer = this.timeoutMs > 0 ? setTimeout(() => controller.abort(), this.timeoutMs) : undefined
     try {
-      const response = await this.fetchImpl(url, {
+      const target = new URL(url)
+      try {
+        await assertSafeUrl(target, this.lookupImpl)
+      } catch (error) {
+        if (error instanceof EndpointSecurityError) throw new FeishuError(error.message, 400)
+        throw error
+      }
+      const response = await this.fetchImpl(target.toString(), {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,

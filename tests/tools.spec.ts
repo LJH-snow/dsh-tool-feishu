@@ -4,6 +4,9 @@ import { FeishuClient } from '../src/client.ts'
 import { createTools } from '../src/index.ts'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
+/** Deterministic DNS so tests never depend on real resolution. */
+const publicLookup = async () => [{ address: '93.184.216.34', family: 4 as const }]
+
 function feishuOk(data: unknown): Response {
   return new Response(JSON.stringify({ code: 0, msg: 'ok', data }), { status: 200, headers: { 'content-type': 'application/json' } })
 }
@@ -12,7 +15,7 @@ function exec(): ToolRunContext {
   return { signal: new AbortController().signal } as unknown as ToolRunContext
 }
 
-function tools(client = new FeishuClient({ fetchImpl: globalThis.fetch })) {
+function tools(client = new FeishuClient({ lookupImpl: publicLookup, fetchImpl: globalThis.fetch })) {
   return Object.fromEntries(createTools(client).map(t => [t.name, t]))
 }
 
@@ -76,7 +79,7 @@ describe('tool definitions', () => {
       items: [{ chat_id: 'oc_1', name: 'General', chat_type: 'group', user_count: 10, bot_in_chat: true }],
       has_more: false, page_token: '',
     }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
     const result = await map.feishu_list_chats.execute({}, exec())
 
     expect(result).toMatchObject({ found: true })
@@ -92,7 +95,7 @@ describe('tool definitions', () => {
         items: [{ chat_id: 'oc_1', name: 'General', chat_type: 'group', user_count: 10, bot_in_chat: true }],
         has_more: false, page_token: '',
       }))
-    const map = tools(new FeishuClient({ appId: 'cli_test', appSecret: 'secret', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, appId: 'cli_test', appSecret: 'secret', fetchImpl }))
 
     expect(await map.feishu_auth_test.execute({}, exec())).toMatchObject({ ok: true, appId: 'cli_test' })
     const chats = await map.feishu_list_chats.execute({}, exec())
@@ -114,7 +117,7 @@ describe('tool definitions', () => {
         department_list: [{ department_id: 'dep_2', name: 'Design', member_count: 5, status: 'active' }],
         has_more: false, page_token: '',
       }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const department = await map.feishu_get_department.execute({ departmentId: 'dep_1', departmentIdType: 'open_department_id' }, exec())
     expect(department).toMatchObject({ found: true, name: 'Engineering', memberCount: 12 })
@@ -131,7 +134,7 @@ describe('tool definitions', () => {
       items: [{ department_id: 'dep_child_1', name: 'Platform', member_count: 7, status: 'active' }],
       has_more: false, page_token: '',
     }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const departments = await map.feishu_list_department_children.execute({ departmentId: 'dep_1', departmentIdType: 'open_department_id', fetchChild: true }, exec())
     expect(departments).toMatchObject({ found: true })
@@ -147,7 +150,7 @@ describe('tool definitions', () => {
         items: [{ member_id: 'u1', member_id_type: 'user_id', name: 'Alice', tenant_key: 'tk1' }],
         has_more: false, page_token: '',
       }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const chat = await map.feishu_get_chat.execute({ chatId: 'oc_1' }, exec())
     expect(chat).toMatchObject({ found: true, name: 'General', memberCount: 10 })
@@ -178,7 +181,7 @@ describe('tool definitions', () => {
         create_time: '1700000000', update_time: '1700000000',
         deleted: false, updated: false, mentions: [],
       }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const messages = await map.feishu_list_messages.execute({ chatId: 'oc_1' }, exec())
     expect(messages).toMatchObject({ found: true })
@@ -192,7 +195,7 @@ describe('tool definitions', () => {
 
   it('executes send message', async () => {
     const fetchImpl = vi.fn(async () => feishuOk({ message_id: 'msg_new' }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const sent = await map.feishu_send_message.execute({ chatId: 'oc_1', msgType: 'text', content: '{"text":"hi"}' }, exec())
     expect(sent).toMatchObject({ ok: true, messageId: 'msg_new' })
@@ -218,7 +221,7 @@ describe('tool definitions', () => {
         }],
         has_more: false, page_token: '',
       }))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const user = await map.feishu_get_user.execute({ userId: 'u1' }, exec())
     expect(user).toMatchObject({ found: true, name: 'Alice', email: 'alice@example.com' })
@@ -267,7 +270,7 @@ describe('tool definitions', () => {
       }))
       .mockResolvedValueOnce(feishuOk({}))
       .mockResolvedValueOnce(feishuOk({}))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const calendars = await map.feishu_list_calendars.execute({}, exec())
     expect(calendars).toMatchObject({ found: true })
@@ -327,7 +330,7 @@ describe('tool definitions', () => {
         timeline: [{ task_id: 'task_2' }],
       }))
       .mockResolvedValueOnce(feishuOk({}))
-    const map = tools(new FeishuClient({ token: 't', fetchImpl }))
+    const map = tools(new FeishuClient({ lookupImpl: publicLookup, token: 't', fetchImpl }))
 
     const approved = await map.feishu_approve_approval_task.execute({ instanceId: 'inst_1', taskId: 'task_1', userId: 'u1' }, exec())
     expect(approved).toMatchObject({ ok: true, approvalCode: 'ap_1', instanceCode: 'inst_1', taskId: 'task_1' })

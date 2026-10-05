@@ -6,7 +6,7 @@
 |---|---|
 | 项目名 | `dsh-tool-feishu` |
 | 定位 | DeepSeek Harness 的飞书/Lark 集成插件 |
-| 版本 | v0.1.0 |
+| 版本 | v0.2.0 |
 | 架构 | Cordis 插件 + `ctx.tools.register(defineTool(...))` |
 | API | 飞书 Open API v1/v3/v4 |
 | 认证 | tenant_access_token（appId + appSecret）或静态 token |
@@ -15,6 +15,7 @@
 
 ```text
 src/client.ts      FeishuClient：token 管理、fetch 注入、超时、错误映射
+src/url-security.ts endpoint 规范化与 fail-closed 目标地址校验
 src/index.ts       18 个 defineTool 定义与插件 apply
 tests/client.spec.ts  客户端契约测试
 tests/tools.spec.ts   工具注册、凭证保护、业务值测试
@@ -22,6 +23,10 @@ examples/cordis.yml   dsh 组合配置示例
 ```
 
 ## 2. 技术决策
+
+### 2.0 endpoint 安全校验
+
+`baseUrl` 规范化为 origin + 路径前缀，禁止 credentials、query 和 fragment。每次请求前用 `src/url-security.ts` 做 fail-closed 目标校验：拒绝 localhost/.local 名称、环回、私有、链路本地、CGNAT、组播、保留及全部 IANA 特殊用途地址段，域名 DNS 结果含任一此类地址即拒绝。该校验同时覆盖 tenant_access_token 获取请求。阻断清单（18 个 IPv4 + 16 个 IPv6）与 IANA 注册表对齐，`src/url-security.ts` 由 `.verify/url-security.template.ts` 生成，不得单独修改。`lookupImpl` 仅作测试注入点，不进入插件配置接口。
 
 ### 2.1 认证
 
